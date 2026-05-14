@@ -1,6 +1,6 @@
-# Claude Code 개발 환경 세팅 가이드
+# Claude Code 개발 환경 세팅 가이드 (macOS)
 
-새 PC에서 Claude Code 서브에이전트 + MCP 서버를 동일하게 구성하는 가이드입니다.
+새 맥북에서 Claude Code 서브에이전트 + MCP 서버를 동일하게 구성하는 가이드입니다.
 
 ---
 
@@ -8,16 +8,17 @@
 
 | 도구 | 설치 명령 | 확인 |
 |------|-----------|------|
-| Node.js 18+ | https://nodejs.org 에서 LTS 설치 | `node -v` |
-| Git | https://git-scm.com 에서 설치 | `git --version` |
+| Homebrew | `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"` | `brew --version` |
+| Node.js 18+ | `brew install node` | `node -v` |
+| Git | `brew install git` | `git --version` |
 | Claude Code | `npm install -g @anthropic-ai/claude-code` | `claude --version` |
-| GitHub CLI | https://cli.github.com 에서 설치 | `gh --version` |
+| GitHub CLI | `brew install gh` | `gh --version` |
 
 ---
 
 ## 1단계 — GitHub 로그인
 
-```powershell
+```bash
 gh auth login
 ```
 
@@ -29,18 +30,18 @@ gh auth login
 
 ## 2단계 — 서브에이전트 설치 (VoltAgent 100개+ 컬렉션)
 
-```powershell
+```bash
 # agents 폴더 생성
-New-Item -ItemType Directory -Force "$env:USERPROFILE\.claude\agents"
+mkdir -p ~/.claude/agents
 
 # VoltAgent 클론
-git clone https://github.com/VoltAgent/awesome-claude-code-subagents.git "$env:TEMP\volt-agents"
+git clone https://github.com/VoltAgent/awesome-claude-code-subagents.git /tmp/volt-agents
 
 # 에이전트 파일 복사
-Copy-Item "$env:TEMP\volt-agents\agents\*" "$env:USERPROFILE\.claude\agents\" -Recurse -Force
+cp -r /tmp/volt-agents/agents/* ~/.claude/agents/
 
-# 확인
-Get-ChildItem "$env:USERPROFILE\.claude\agents\" | Measure-Object | Select-Object -ExpandProperty Count
+# 확인 (설치된 에이전트 수)
+ls ~/.claude/agents/ | wc -l
 ```
 
 > 설치 후 Claude Code 재시작 시 자동으로 에이전트가 인식됩니다.
@@ -51,13 +52,13 @@ Get-ChildItem "$env:USERPROFILE\.claude\agents\" | Measure-Object | Select-Objec
 
 ### Playwright (브라우저 자동화 / E2E 테스트)
 
-```powershell
+```bash
 claude mcp add playwright npx -- -y @playwright/mcp@latest
 ```
 
 ### GitHub (PR·이슈·코드리뷰 자동화)
 
-```powershell
+```bash
 claude mcp add github npx -- -y @modelcontextprotocol/server-github
 ```
 
@@ -66,45 +67,48 @@ claude mcp add github npx -- -y @modelcontextprotocol/server-github
 > 1. https://github.com/settings/tokens 에서 `repo`, `read:org` 권한으로 토큰 생성
 > 2. 아래 명령으로 재등록:
 >
-> ```powershell
+> ```bash
 > claude mcp remove github
 > claude mcp add github -e GITHUB_PERSONAL_ACCESS_TOKEN=ghp_여기에토큰 npx -- -y @modelcontextprotocol/server-github
 > ```
 
 ### Figma (디자인 → 코드 변환)
 
-```powershell
+```bash
 # Figma 토큰: https://www.figma.com/developers/api#access-tokens 에서 발급
 claude mcp add figma npx -- -y figma-mcp --figma-token=YOUR_FIGMA_TOKEN
 ```
 
 ### Supabase (DB / Auth 관리)
 
-```powershell
-claude mcp add supabase npx -- -y @supabase/mcp-server-supabase --project-url=YOUR_SUPABASE_URL --anon-key=YOUR_ANON_KEY
+```bash
+claude mcp add supabase npx -- -y @supabase/mcp-server-supabase \
+  --project-url=YOUR_SUPABASE_URL \
+  --anon-key=YOUR_ANON_KEY
 ```
 
 ---
 
 ## 4단계 — 등록 확인
 
-```powershell
+```bash
 claude mcp list
 ```
 
 정상 출력 예시:
 ```
-playwright: npx -y @playwright/mcp@latest         - ✓ Connected
-github: npx -y @modelcontextprotocol/server-github - ✓ Connected
+playwright: npx -y @playwright/mcp@latest          - ✓ Connected
+github: npx -y @modelcontextprotocol/server-github  - ✓ Connected
 ```
 
 ---
 
 ## 5단계 — Claude Code 전역 설정 (선택)
 
-`C:\Users\[사용자명]\.claude\settings.json` 파일을 아래 내용으로 생성:
+`~/.claude/settings.json` 파일을 아래 내용으로 생성:
 
-```json
+```bash
+cat > ~/.claude/settings.json << 'EOF'
 {
   "language": "Korean",
   "theme": "dark",
@@ -117,6 +121,7 @@ github: npx -y @modelcontextprotocol/server-github - ✓ Connected
     "refreshInterval": 10
   }
 }
+EOF
 ```
 
 ---
@@ -125,21 +130,40 @@ github: npx -y @modelcontextprotocol/server-github - ✓ Connected
 
 위 모든 단계를 한 번에 실행:
 
-```powershell
-# 1. agents 폴더 준비
-New-Item -ItemType Directory -Force "$env:USERPROFILE\.claude\agents"
+```bash
+#!/bin/bash
+set -e
 
-# 2. VoltAgent 서브에이전트 설치
-git clone https://github.com/VoltAgent/awesome-claude-code-subagents.git "$env:TEMP\volt-agents"
-Copy-Item "$env:TEMP\volt-agents\agents\*" "$env:USERPROFILE\.claude\agents\" -Recurse -Force
+echo "🚀 Claude Code 개발 환경 세팅 시작..."
 
-# 3. MCP 서버 등록
+# 1. Homebrew 필수 도구 설치
+brew install node git gh 2>/dev/null || true
+
+# 2. Claude Code 설치
+npm install -g @anthropic-ai/claude-code
+
+# 3. agents 폴더 준비
+mkdir -p ~/.claude/agents
+
+# 4. VoltAgent 서브에이전트 설치
+git clone https://github.com/VoltAgent/awesome-claude-code-subagents.git /tmp/volt-agents
+cp -r /tmp/volt-agents/agents/* ~/.claude/agents/
+echo "✅ 서브에이전트 $(ls ~/.claude/agents/ | wc -l | tr -d ' ')개 설치 완료"
+
+# 5. MCP 서버 등록
 claude mcp add playwright npx -- -y @playwright/mcp@latest
 claude mcp add github npx -- -y @modelcontextprotocol/server-github
 
-# 4. 확인
+# 6. 확인
+echo ""
+echo "✅ 설치 완료! MCP 서버 상태:"
 claude mcp list
-Write-Host "✅ 설정 완료" -ForegroundColor Green
+```
+
+스크립트 저장 후 실행:
+
+```bash
+chmod +x setup.sh && ./setup.sh
 ```
 
 ---
